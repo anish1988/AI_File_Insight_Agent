@@ -1,6 +1,8 @@
 import re
-from typing import List, Dict
+from typing import List, Dict, Union
 import streamlit as st
+import json
+import sys
 
 
 LOG_PATTERNS = {
@@ -32,20 +34,48 @@ def load_file(uploaded_file):
     else:
         return None, None
 
-def convert_content_binary_json(content: str,log_type) -> List[Dict[str, dict]]:
-    pattern_type = LOG_PATTERNS.get(log_type)
-    print(f"Pattern type: {pattern_type}")
-    pattern = re.compile(pattern_type)
-    print(f"Pattern: {pattern}")
-   # log_text = "\n".join(
-    #    [f"{content['timestamp']} - {content['level']} - {content['code']} - {content['message']}"
-    print(f"Content: {content}")
-    # Decode the content if it's in bytes
+
+
+def convert_content_binary_json(content: Union[str, bytes], log_type=None) -> List[Dict[str, Union[str, dict]]]:
     if isinstance(content, bytes):
-        content = content.decode("utf-8", errors="ignore")
-    print(f"Decoded content: {content}")
-    results = []
-    for match in pattern.finditer(content):
-        results.append( match.groupdict())
-    
-    return results
+        content = content.decode("utf-8", errors="replace")
+
+    print(f"Content type: {type(content)}")
+    print(f"Content length: {len(content)}")
+
+    # Split based on log timestamp pattern
+    log_chunks = re.split(r"(?=\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\])", content)
+    entries = []
+
+    for chunk in log_chunks:
+        if not chunk.strip():
+            continue  # Skip empty parts
+
+        # Extract timestamp
+        ts_match = re.search(r"\[(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]", chunk)
+        env_match = re.search(r"\] (?P<env>\w+)\.(?P<level>\w+):", chunk)
+        msg_match = re.search(r": (?P<msg>.+?)\n\{", chunk, re.DOTALL)
+
+        json_start = chunk.find("{")
+        json_data = chunk[json_start:] if json_start != -1 else ""
+
+        try:
+            exception_json = json.loads(json_data)
+        except Exception:
+            exception_json = json_data.strip()
+
+        entry = {
+            "timestamp": ts_match.group("timestamp") if ts_match else "",
+            "environment": env_match.group("env") if env_match else "",
+            "log_level": env_match.group("level") if env_match else "",
+            "message": msg_match.group("msg").strip() if msg_match else "",
+            "exception": exception_json
+        }
+
+        print("Parsed Entry:", entry)  # Remove in production
+        entries.append(entry)
+
+    return entries
+
+
+
