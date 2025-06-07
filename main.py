@@ -41,8 +41,8 @@ def main():
 
        # Step 3: Chunk large file if needed
        chunks = chunk_large_file(content)
-       print(f"Number of chunks created: {len(chunks)}")
-       print(f"First chunk content: {chunks[0][:100]}...")  # Display first 100 characters of the first chunk
+       #print(f"Number of chunks created: {len(chunks)}")
+       #print(f"First chunk content: {chunks[0][:100]}...")  # Display first 100 characters of the first chunk
        # Display chunks in Streamlit DataFrame
 
        if chunks:
@@ -60,12 +60,12 @@ def main():
        
        if len(chunks) <= 5:
            selected_chunks = chunks
-           print(f"Using all {len(chunks)} chunks for analysis.")
+           #print(f"Using all {len(chunks)} chunks for analysis.")
        else:
            selected_chunks = [chunks[0]]
-       print(f"Selected {len(selected_chunks)} chunks for analysis.")
-       print("Type of selected_chunks:", type(selected_chunks))
-       print("Sample content:", selected_chunks[:1])
+       #print(f"Selected {len(selected_chunks)} chunks for analysis.")
+       #print("Type of selected_chunks:", type(selected_chunks))
+       #print("Sample content:", selected_chunks[:1])
        regex_patterns = get_error_suggestions(selected_chunks, mode="pattern_discovery")
 
        print(f"Discovered regex patterns: {regex_patterns}")
@@ -93,18 +93,16 @@ def main():
           st.error("No normalized log entries found. Please check the regex patterns or log content.")
        
 
-       for error_entry in normalized_logs:
-           print(f"Processing error entry: {error_entry}")
+       for idx, error_entry in enumerate(normalized_logs, start=1):
+           print(f"Processing error #{idx}: {error_entry}")
            # Display error entry in Streamlit
-           st.subheader("🔍 Error Entry")
+           #st.subheader("🔍 Error Entry")
            # Display the error entry 
-           st.info(f"Error Entry: {error_entry}")
+           #st.info(f"Error Entry: {error_entry}")
               # Send to LLM for summarization
            summaries = summarize_log_entries(error_entry) 
            print(f"Summaries: {summaries}")
-           print(f"Summaries message print: {summaries[0]["message"]}")
           
-           
            df = pd.DataFrame({
                             "log": error_entry,
                             "Message": summaries[0]["message"],
@@ -112,7 +110,7 @@ def main():
                             "fix_suggestion": summaries[0]["fix_suggestion"],
                             "code_fix": summaries[0]["code_fix"],
                             "code_location": summaries[0]["code_location"],
-                            "resources": summaries[0]["resources"]
+                            "resources": [", ".join(summaries[0]["resources"])]
                         })
            st.success("✅ Summary complete!")
            st.dataframe(df) 

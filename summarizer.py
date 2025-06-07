@@ -95,12 +95,12 @@ def call_llm(prompt: str) -> dict:
         if result_text.endswith("```"):
             result_text = result_text.removesuffix("```").strip()
         logger.debug(f"Raw LLM response: {result_text}")
-        print("type of result_text:", type(result_text))
-        print(f"LLM response content New:\n{result_text}\n")
+       # print("type of result_text:", type(result_text))
+       # print(f"LLM response content New:\n{result_text}\n")
         #sys.exit(0)
         json_result = json.loads(result_text)
-        print(f"LLM Json response content:\n{json_result}\n")
-        print("type of result_text:", type(json_result))
+      #  print(f"LLM Json response content:\n{json_result}\n")
+      #  print("type of result_text:", type(json_result))
         #sys.exit(0)
         if not isinstance(json_result, dict):
             raise ValueError("Invalid JSON response structure.")
@@ -119,13 +119,13 @@ def summarize_log_entries(entries: List[Union[str, dict]]) -> List[dict]:
     try:
             logger.info(f"🔍 Summarizing log entry{entries}")
             log_text = json.dumps(entries) if isinstance(entries, dict) else str(entries)
-            print(f"Log entry  content:\n{log_text}\n")
+            #print(f"Log entry  content:\n{log_text}\n")
             #sys.exit(0)
             prompt = LOG_PROMPT_TEMPLATE.format(log_entry=log_text)
 
             summary = call_llm(prompt)
             print(f"LLM summary content:\n{summary}\n")
-            print("type of summary:", type(summary))
+           # print("type of summary:", type(summary))
             #sys.exit(0)
             if not summary.get("message") or not summary.get("summary"):
                 logger.warning(f"⚠️ Entry {entries}: LLM did not return expected fields. Retrying...")
@@ -145,7 +145,7 @@ def summarize_log_entries(entries: List[Union[str, dict]]) -> List[dict]:
             })
 
     logger.info(f"✅ Total summarized entries: {len(summaries)}")
-    print(f"Summaries: {summaries}")
+    #print(f"Summaries: {summaries}")
     return summaries
 
 # Main summarization function
