@@ -2,13 +2,6 @@ from langsmith import traceable
 from langsmith import Client
 import os
 
-##LANGSMITH_TRACING=true
-#LANGCHAIN_TRACING_V2=true
-#LANGSMITH_ENDPOINT=https://api.smith.langchain.com
-#LANGSMITH_API_KEY=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
-#LANGSMITH_PROJECT=AI_File_Insight_Agent
-#GOOGLE_API_KEY=AIzaSyAHKslPTAmVCohERhQUlqLkNgrH9FeQpmw
-#OPENAI_API_KEY=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
 
 from dotenv import load_dotenv
 load_dotenv()
