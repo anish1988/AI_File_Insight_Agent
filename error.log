@@ -1,0 +1,5 @@
+2024-03-17T14:50:24.028780Z 156 [Warning] [MY-013360] [Server] Plugin mysql_native_password reported: ''mysql_native_password' is deprecated and will be removed in a future release. Please use caching_sha2_password instead'
+2024-03-17T14:50:24.042442Z 157 [Warning] [MY-013360] [Server] Plugin mysql_native_password reported: ''mysql_native_password' is deprecated and will be removed in a future release. Please use caching_sha2_password instead'
+[Sat Jun 07 00:00:22.712954 2025] [mpm_prefork:notice] [pid 786] AH00163: Apache/2.4.52 (Ubuntu) mod_wsgi/4.9.0 Python/3.10 configured -- resuming normal operations
+[Sat Jun 07 00:00:22.712974 2025] [core:notice] [pid 786] AH00094: Command line: '/usr/sbin/apache2'
+[Sun Jun 08 00:00:06.641282 2025] [mpm_prefork:notice] [pid 786] AH00171: Graceful restart requested, doing restart
