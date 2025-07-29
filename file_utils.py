@@ -2,6 +2,7 @@
 
 import streamlit as st
 import os
+import sys
 import tempfile
 import chardet
 import math
@@ -15,7 +16,11 @@ from typing import List, Dict, Tuple, Union
 
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.DEBUG, format="%(levelname)s:%(name)s:%(message)s")
+
+# Suppress watchdog debug logs by setting its level to WARNING or ERROR
+logging.getLogger("watchdog").setLevel(logging.WARNING)
+logging.getLogger("watchdog.observers.inotify_buffer").setLevel(logging.WARNING)
 SUPPORTED_LOG_TYPES = ["apache", "nginx", "laravel", "php", "asterisk", "mysql"]
 
 # src/streamlit_app/app.py
@@ -207,7 +212,18 @@ LOG_PATTERNS = {
     "apache": r'\[\w+ \w+ \d{2} \d{2}:\d{2}:\d{2}.\d+ \d{4}\]',
     "nginx": r'\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}',
     "asterisk": r'\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]',
-    "syslog": r'^\w{3} \d{1,2} \d{2}:\d{2}:\d{2}'
+    "syslog": r'^\w{3} \d{1,2} \d{2}:\d{2}:\d{2}',
+    "mysql": r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z",
+    "php": r'\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\] \[error\]',
+    "docker": r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}',
+    "default": r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}',
+    "learned_1": r'\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\] \[error\] (?P<message>.*)',
+    "learned_2": r'^\w{3} \d{1,2} \d{2}:\d{2}:\d{2} (?P<message>.*)',
+    "learned_3": r'\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2} (?P<message>.*)',
+    "learned_4": r'\d{2}:\d{2}:\d{2} (?P<message>.*)',
+    "learned_5": r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2} (?P<message>.*)',
+    "learned_6": r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} (?P<message>.*)',
+    "learned_7": r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \[error\] (?P<message>.*)'
 }
 
 # Function to try extracting JSON from log using pattern
@@ -277,7 +293,7 @@ def normalize_log_file_content(log_text: str) -> List[Union[Dict[str, str], str]
     st.info(f"Detected log type: {log_type}")
     st.info(f"Pattern used for detection: {pattern}")
 
-    if not pattern:
+    if not pattern or pattern is None:
         st.warning("No known pattern matched. Attempting to learn...")
         try:
             log_type, pattern = try_to_learn_log_pattern(log_text)
@@ -289,6 +305,8 @@ def normalize_log_file_content(log_text: str) -> List[Union[Dict[str, str], str]
         
 
     logger.info(f"Detected log type: {log_type}")
+    logger.info(f"Detected log type: {pattern}")
+   # sys.exit(0)
 
     # Try JSON conversion
     structured = extract_json_logs(log_text, pattern)

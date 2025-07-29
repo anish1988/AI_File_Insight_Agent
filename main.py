@@ -6,6 +6,8 @@ from dotenv import load_dotenv
 from langchain.callbacks.tracers import LangChainTracer
 from langsmith import Client
 from langchain.callbacks.manager import CallbackManager
+from langchain.globals import set_llm_cache
+from langchain.cache import InMemoryCache
 from summarizer import summarize_logs,summarize_log_entries  # Import the summarization function
 from upload_convert_file import load_file, convert_content_binary_json
 from export_log import export_pdf, export_excel
@@ -18,7 +20,7 @@ from file_utils import detect_log_type, read_log_file,launch_ui,chunk_large_file
 
 load_dotenv()
 
-
+set_llm_cache(InMemoryCache())
 # initialize the tracer
 if os.getenv("LANGCHAIN_TRACING_V2","false").lower() == "true":
     tracer = LangChainTracer()
@@ -30,6 +32,8 @@ if os.getenv("LANGCHAIN_TRACING_V2","false").lower() == "true":
 # main function to run the Streamlit app
 def main():
     
+       st.cache_data.clear()
+       st.cache_resource.clear()
        # Step 1: Launch Streamlit UI to upload a log file
        file_path = launch_ui()
 
@@ -110,7 +114,7 @@ def main():
                             "fix_suggestion": summaries[0]["fix_suggestion"],
                             "code_fix": summaries[0]["code_fix"],
                             "code_location": summaries[0]["code_location"],
-                            "resources": [", ".join(summaries[0]["resources"])]
+                            "resources":list(summaries[0]["resources"])# [", ".join(summaries[0]["resources"])]
                         })
            st.success("✅ Summary complete!")
            st.dataframe(df) 

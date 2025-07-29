@@ -10,56 +10,82 @@ import json
 import time
 import logging
 import sys
+import uuid
+import traceback
 from tenacity import retry, stop_after_attempt, wait_fixed
 from typing import List, Union
 from dotenv import load_dotenv
 
 load_dotenv()
-
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.DEBUG, format="%(levelname)s:%(name)s:%(message)s")
+
+# Suppress watchdog debug logs by setting its level to WARNING or ERROR
+logging.getLogger("watchdog").setLevel(logging.WARNING)
+logging.getLogger("watchdog.observers.inotify_buffer").setLevel(logging.WARNING)
 
 # Prompt template to analyze log messages and exceptions
 #
 # prompt = ChatPromptTemplate.from_template(
 LOG_PROMPT_TEMPLATE = """
-  You are an expert log analysis assistant and debugging assistant helping developers debug backend applications.
-     Analyze the following log entry and provide detailed insights.
-    
-You will be given a log entry in JSON/array/list format that contains:
+You are a highly skilled log analysis assistant helping developers troubleshoot and debug backend systems.
 
-- An `exception`: the detailed stack trace or exception message, if available.
+You will be given a single log entry (in plain text, JSON, or list format), which may come from any type of backend system including but not limited to:
+- MySQL, Apache, NGINX, PHP, Python, Java, Node.js, Laravel, Asterisk, etc.
 
-Here is the log Entry:
-{{log_entry}}
+The log may include warnings, errors, exceptions, deprecation notices, stack traces, or performance issues.
 
-Your job is to:
-1. Analyze the `message` and `exception` together.
-2. Summarize the **root cause** of the issue in clear, developer-friendly terms.
-3. Suggest **a likely fix** or next step if one is obvious.
-4. Avoid simply repeating the input — rephrase and clarify.
+---
 
-If `message` is vague or empty, fall back to `exception` for insight.  
-Always return a concise explanation in **1–3 lines**, without boilerplate or disclaimers.
+🔍 Analyze the log content carefully and perform the following tasks:
 
-Return the response in JSON format with the following fields:
+1. **Understand the log context**: Use both `message` and `exception` (if present) to infer what went wrong.
+2. **Identify the technology or system** involved (e.g. MySQL, PHP, etc.) based on log content , log text or keywords.
+3. **Summarize the root cause** in developer-friendly language — rephrase the error clearly.
+4. **Suggest a likely fix or mitigation step** that is relevant to the identified system.
+5. **Provide a code/config fix example**, if applicable.
+6. **Point the developer to where to look** (e.g., a config file, function, database setting).
+7. **List 5 reliable and system-specific online resources or docs** that can help solve this problem.
 
-1. "message": Clean summary of the log error.
-2. "summary": Root cause analysis (what went wrong and why).
-3. "fix_suggestion": A likely fix or next step the developer can take.
-4. "code_fix": Example of code changes needed, with reasoning.
-5. "code_location": Suggest where the developer should look in the codebase.
-6. "resources": A list of 5 relevant online resources (URLs or titles) that may help resolve this.
-
-IMPORTANT:
-- Do NOT repeat the full log entry.
-- Focus on rephrasing and explaining the actual error.
-- Include developer-friendly and technically useful language.
-- Always return a valid JSON object, or retry if generation fails.
+---
 
 
+
+📌 **Important Notes**:
+- Treat every log entry as a **unique and independent** problem, regardless of similarity to previous logs.
+- Do **not** reuse or repeat explanations given for earlier entries.
+- Avoid generic or unrelated error explanations.
+- Focus on accuracy and relevance to the given log entry.
+- If the log is a deprecation warning, do **not** treat it as an exception or crash.
+- If the technology is not explicitly stated, infer carefully but do not assume unrelated error types.
+
+
+---
+
+
+Return your response as a **well-formatted JSON object** with these exact fields:
+
+{{
+  "message": "<Brief, human-readable summary of the log error>",
+  "summary": "<Concise root cause explanation>",
+  "fix_suggestion": "<Clear, actionable advice for resolving the issue>",
+  "code_fix": "<Example code/config adjustment with reasoning, if applicable>",
+  "code_location": "<Where to apply or investigate the fix in the code/configuration>",
+  "resources": ["<URL or resource title>", "..."]
+}}
+
+📌 **Additional Notes**:
+
+- Tailor the solution based on the detected **tech stack** (MySQL, PHP, etc.).
+- Do **not assume** Java or NullPointerException unless clearly indicated.
+- Do **not invent** error types that don’t match the input.
+- Keep explanations concise but technically helpful (2–4 lines max).
+
+---
+
+Log Entry:
+{log_entry}
 """
-#)
 
 # Initialize OpenAI chat model
 #llm = ChatOpenAI(
@@ -119,22 +145,35 @@ def summarize_log_entries(entries: List[Union[str, dict]]) -> List[dict]:
     try:
             logger.info(f"🔍 Summarizing log entry{entries}")
             log_text = json.dumps(entries) if isinstance(entries, dict) else str(entries)
-            #print(f"Log entry  content:\n{log_text}\n")
+            print(f"Log entry  content:\n{log_text}\n")
+            log_entry = {
+                "message": log_text,
+                "exception": None,
+                "request_id": str(uuid.uuid4())  # Ensure uniqueness
+            }
+            print(f"Log entry  content:\n{log_entry}\n")
             #sys.exit(0)
             prompt = LOG_PROMPT_TEMPLATE.format(log_entry=log_text)
-
+            #prompt = LOG_PROMPT_TEMPLATE.format(log_entry=json.dumps(log_entry, indent=2))
+            print(f"LLM prompt content:\n{prompt}\n")
+            #sys.exit(0)
             summary = call_llm(prompt)
             print(f"LLM summary content:\n{summary}\n")
            # print("type of summary:", type(summary))
             #sys.exit(0)
-            if not summary.get("message") or not summary.get("summary"):
-                logger.warning(f"⚠️ Entry {entries}: LLM did not return expected fields. Retrying...")
+          #  if not summary.get("message") or not summary.get("summary"):
+           #     logger.warning(f"⚠️ Entry {entries}: LLM did not return expected fields. Retrying...")
             
 
-            summaries.append(summary)
+           # summaries.append(summary)
+            if isinstance(summary, dict) and summary.get("message") and summary.get("summary"):
+                summaries.append(summary)
+            else:
+                raise ValueError(f"Unexpected LLM output format: {summary}")
 
     except Exception as e:
-            logger.error(f"❌ Failed to summarize entry {entries}: {e}")
+            #logger.error(f"❌ Failed to summarize entry {entries}: {e}")
+            logger.error(f"❌ Failed to summarize entry {entries}: {e}\n{traceback.format_exc()}")
             summaries.append({
                 "message": f"Failed to analyze log entry {entries}",
                 "summary": str(e),
