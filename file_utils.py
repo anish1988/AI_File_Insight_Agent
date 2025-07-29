@@ -2,6 +2,7 @@
 
 import streamlit as st
 import os
+import sys
 import tempfile
 import chardet
 import math
@@ -15,7 +16,11 @@ from typing import List, Dict, Tuple, Union
 
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.DEBUG, format="%(levelname)s:%(name)s:%(message)s")
+
+# Suppress watchdog debug logs by setting its level to WARNING or ERROR
+logging.getLogger("watchdog").setLevel(logging.WARNING)
+logging.getLogger("watchdog.observers.inotify_buffer").setLevel(logging.WARNING)
 SUPPORTED_LOG_TYPES = ["apache", "nginx", "laravel", "php", "asterisk", "mysql"]
 
 # src/streamlit_app/app.py
@@ -207,7 +212,18 @@ LOG_PATTERNS = {
     "apache": r'\[\w+ \w+ \d{2} \d{2}:\d{2}:\d{2}.\d+ \d{4}\]',
     "nginx": r'\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}',
     "asterisk": r'\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]',
-    "syslog": r'^\w{3} \d{1,2} \d{2}:\d{2}:\d{2}'
+    "syslog": r'^\w{3} \d{1,2} \d{2}:\d{2}:\d{2}',
+    "mysql": r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z",
+    "php": r'\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\] \[error\]',
+    "docker": r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}',
+    "default": r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}',
+    "learned_1": r'\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\] \[error\] (?P<message>.*)',
+    "learned_2": r'^\w{3} \d{1,2} \d{2}:\d{2}:\d{2} (?P<message>.*)',
+    "learned_3": r'\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2} (?P<message>.*)',
+    "learned_4": r'\d{2}:\d{2}:\d{2} (?P<message>.*)',
+    "learned_5": r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2} (?P<message>.*)',
+    "learned_6": r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} (?P<message>.*)',
+    "learned_7": r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \[error\] (?P<message>.*)'
 }
 
 # Function to try extracting JSON from log using pattern
@@ -247,7 +263,28 @@ def detect_log_format(log_text: str) -> Tuple[Union[str, None], Union[str, None]
             return name, pattern
     return None, None
 
+def try_to_learn_log_pattern(log_text: str) -> Tuple[str, str]:
+    """
+    Attempt to guess a new timestamp pattern from unknown log text.
+    """
+    # Common timestamp regex candidates
+    common_patterns = [
+        r'\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]',
+        r'\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}',
+        r'^\w{3} \d{1,2} \d{2}:\d{2}:\d{2}',
+        r'\d{2}:\d{2}:\d{2}',
+        r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}'
+    ]
+    
+    for pattern in common_patterns:
+        matches = re.findall(pattern, log_text)
+        if len(matches) >= 3:  # A decent confidence
+            new_name = f"learned_{len(LOG_PATTERNS) + 1}"
+            LOG_PATTERNS[new_name] = pattern
+            st.warning(f"🧠 Learned a new log pattern: {pattern} as {new_name}")
+            return new_name, pattern
 
+        
 # Main normalization logic
 def normalize_log_file_content(log_text: str) -> List[Union[Dict[str, str], str]]:
     log_type, pattern = detect_log_format(log_text)
@@ -256,11 +293,20 @@ def normalize_log_file_content(log_text: str) -> List[Union[Dict[str, str], str]
     st.info(f"Detected log type: {log_type}")
     st.info(f"Pattern used for detection: {pattern}")
 
-    if not pattern:
-        logger.error("No pattern matched the log content.")
-        raise ValueError("Unsupported or unknown log format.")
+    if not pattern or pattern is None:
+        st.warning("No known pattern matched. Attempting to learn...")
+        try:
+            log_type, pattern = try_to_learn_log_pattern(log_text)
+        except ValueError as e:
+            logger.error(f"Failed to learn log pattern: {e}")
+            st.error("Failed to learn log pattern. Please check the log format.")
+            st.error(str(e))
+            raise ValueError("Failed to learn log pattern. Please check the log format.")    
+        
 
     logger.info(f"Detected log type: {log_type}")
+    logger.info(f"Detected log type: {pattern}")
+   # sys.exit(0)
 
     # Try JSON conversion
     structured = extract_json_logs(log_text, pattern)
@@ -443,14 +489,14 @@ def sanitize_and_validate_regex(raw_pattern: str) -> str:
     try:
         converted = re.sub(r"\(\?<([a-zA-Z_][a-zA-Z0-9_]*)>", r"(?P<\1>", raw_pattern)
     except Exception as e:
-        logger.error(f"Regex conversion failed: {e}")
+        #logger.error(f"Regex conversion failed: {e}")
         raise ValueError(f"Failed to convert regex named groups: {e}")
 
     # Step 2: Validate regex compilation
     try:
         re.compile(converted)
     except re.error as e:
-        logger.error(f"Regex compile error: {e}")
+        #logger.error(f"Regex compile error: {e}")
         raise ValueError(f"Invalid Python regex after conversion: {e}")
 
     return converted
